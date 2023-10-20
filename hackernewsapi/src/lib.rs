@@ -16,12 +16,17 @@ pub struct HackerNewsResponse {
 }
 
 impl HackerNewsResponse {
-    pub async fn debub_print_story(&self, story_type: StoryType) -> Result<(), HackerNewsApiError> {
+    pub async fn debub_print_story(
+        &self,
+        story_type: StoryType,
+        amount: u8,
+    ) -> Result<(), HackerNewsApiError> {
         // create a vec to store ids we want to work with
-        let amount = 100;
+        let amount = amount as usize;
         let mut ids: Vec<u64> = Vec::new();
         match story_type {
             StoryType::Top => {
+                println!("Story Type: Top");
                 ids = if let Some(story) = &self.top {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -29,6 +34,7 @@ impl HackerNewsResponse {
                 }
             }
             StoryType::New => {
+                println!("Story Type: New");
                 ids = if let Some(story) = &self.new {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -36,6 +42,7 @@ impl HackerNewsResponse {
                 }
             }
             StoryType::Best => {
+                println!("Story Type: Best");
                 ids = if let Some(story) = &self.best {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -43,6 +50,7 @@ impl HackerNewsResponse {
                 }
             }
             StoryType::Ask => {
+                println!("Story Type: Ask");
                 ids = if let Some(story) = &self.ask {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -50,6 +58,7 @@ impl HackerNewsResponse {
                 }
             }
             StoryType::Job => {
+                println!("Story Type: Job");
                 ids = if let Some(story) = &self.job {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -57,6 +66,7 @@ impl HackerNewsResponse {
                 }
             }
             StoryType::Show => {
+                println!("Story Type: Show");
                 ids = if let Some(story) = &self.show {
                     story.iter().cloned().take(amount).collect()
                 } else {
@@ -70,6 +80,17 @@ impl HackerNewsResponse {
             let story = self.fetch_story(*id).await?;
             println!("Story #{} - id: {} - {}", index, id, story.title);
         }
+
+        Ok(())
+    }
+
+    pub async fn debug_print_stories(&self, amount: u8) -> Result<(), HackerNewsApiError> {
+        self.debub_print_story(StoryType::Show, amount).await?;
+        self.debub_print_story(StoryType::Job, amount).await?;
+        self.debub_print_story(StoryType::Best, amount).await?;
+        self.debub_print_story(StoryType::Top, amount).await?;
+        self.debub_print_story(StoryType::New, amount).await?;
+        self.debub_print_story(StoryType::Ask, amount).await?;
 
         Ok(())
     }
@@ -124,7 +145,6 @@ struct Story {
 
 pub struct HackerNewsAPI {
     endpoint: StoryType,
-    stories: HackerNewsResponse,
 }
 
 impl HackerNewsAPI {
@@ -132,7 +152,6 @@ impl HackerNewsAPI {
     pub fn new() -> Self {
         Self {
             endpoint: StoryType::Top,
-            stories: HackerNewsResponse::default(),
         }
     }
 
@@ -188,8 +207,6 @@ impl HackerNewsAPI {
                 _ => {}
             }
         }
-
-        // self.stories = response;
 
         Ok(response)
     }
