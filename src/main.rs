@@ -4,6 +4,28 @@ use url::Url;
 
 const BASE_URL: &str = "https://hacker-news.firebaseio.com/v0";
 
+#[derive(Debug)]
+struct HackerNewsResponse {
+    top: Option<Vec<u64>>,
+    new: Option<Vec<u64>>,
+    best: Option<Vec<u64>>,
+    ask: Option<Vec<u64>>,
+    show: Option<Vec<u64>>,
+    job: Option<Vec<u64>>,
+}
+
+impl Default for HackerNewsResponse {
+    fn default() -> Self {
+        Self {
+            top: None,
+            new: None,
+            best: None,
+            ask: None,
+            show: None,
+            job: None,
+        }
+    }
+}
 #[derive(thiserror::Error, Debug)]
 enum HackerNewsApiError {
     #[error("Failed Fetching Story")]
@@ -40,15 +62,7 @@ impl HackerNewsAPI {
         }
     }
 
-    fn fetch(&mut self) -> Result<(), HackerNewsApiError> {
-        let url = self.prepare_url(None);
-        let req = ureq::get(&url);
-        let response: Vec<i64> = req.call().unwrap().into_json().unwrap();
-
-        Ok(())
-    }
-
-    async fn fetch_stories(&mut self) -> Result<(Vec<u64>), HackerNewsApiError> {
+    async fn fetch_stories(&mut self) -> Result<Vec<u64>, HackerNewsApiError> {
         let url = self.prepare_url(None);
 
         let stories = reqwest::get(url)
@@ -57,14 +71,51 @@ impl HackerNewsAPI {
             .await
             .map_err(|e| HackerNewsApiError::AsyncRequestFailed(e))?;
 
-        // self.stories = stories;
-        // for s in stories.iter().take(20) {
-        //     let story_url = format!("https://hacker-news.firebaseio.com/v0/item/{}.json", s);
-        //     let response = reqwest::get(story_url).await?.json::<Story>().await?;
-        //     println!("{:?}\n", response.title);
-        // }
-        //
         Ok(stories)
+    }
+
+    async fn collect_all_stories(&mut self) -> Result<HackerNewsResponse, HackerNewsApiError> {
+        let mut response = HackerNewsResponse::default();
+        let endpoints = [
+            StoryType::Top,
+            StoryType::New,
+            StoryType::Ask,
+            StoryType::Job,
+            StoryType::Best,
+            StoryType::Show,
+        ];
+
+        for i in endpoints {
+            match i {
+                StoryType::Top => {
+                    self.endpoint = StoryType::Top;
+                    response.top = Some(self.fetch_stories().await?);
+                }
+                StoryType::New => {
+                    self.endpoint = StoryType::New;
+                    response.new = Some(self.fetch_stories().await?);
+                }
+                StoryType::Ask => {
+                    self.endpoint = StoryType::Ask;
+                    response.ask = Some(self.fetch_stories().await?);
+                }
+                StoryType::Job => {
+                    self.endpoint = StoryType::Job;
+                    response.job = Some(self.fetch_stories().await?);
+                }
+                StoryType::Best => {
+                    self.endpoint = StoryType::Best;
+                    response.best = Some(self.fetch_stories().await?);
+                }
+                StoryType::Show => {
+                    self.endpoint = StoryType::Show;
+                    response.show = Some(self.fetch_stories().await?);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(response)
     }
 
     fn prepare_url(&self, id: Option<u32>) -> String {
@@ -137,17 +188,20 @@ struct TopStories {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let top_stories = "https://hacker-news.firebaseio.com/v0/topstories.json";
-
-    // let response = reqwest::get(top_stories).await?.text().await?;
-
-    let top_stories_vec = reqwest::get(top_stories).await?.json::<Vec<u32>>().await?;
-
-    for s in top_stories_vec.iter().take(20) {
-        let story_url = format!("https://hacker-news.firebaseio.com/v0/item/{}.json", s);
-        let response = reqwest::get(story_url).await?.json::<Story>().await?;
-        println!("{:?}\n", response.title);
-    }
+    // let top_stories = "https://hacker-news.firebaseio.com/v0/topstories.json";
+    //
+    // // let response = reqwest::get(top_stories).await?.text().await?;
+    //
+    // let top_stories_vec = reqwest::get(top_stories).await?.json::<Vec<u32>>().await?;
+    //
+    let mut hn_api = HackerNewsAPI::new();
+    let stories = hn_api.collect_all_stories().await.unwrap();
+    println!("{:#?}", stories);
+    // for s in stories.iter().take(20) {
+    //     let story_url = format!("https://hacker-news.firebaseio.com/v0/item/{}.json", s);
+    //     let response = reqwest::get(story_url).await?.json::<Story>().await?;
+    //     println!("{:?}\n", response.title);
+    // }
 
     Ok(())
 }
