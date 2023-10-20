@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use url::Url;
 
@@ -12,6 +13,79 @@ struct HackerNewsResponse {
     ask: Option<Vec<u64>>,
     show: Option<Vec<u64>>,
     job: Option<Vec<u64>>,
+    stories: Option<Vec<HashMap<u64, Story>>>,
+}
+
+impl HackerNewsResponse {
+    async fn debub_print_story(&self, story_type: StoryType) -> Result<(), HackerNewsApiError> {
+        // create a vec to store ids we want to work with
+        let amount = 100;
+        let mut ids: Vec<u64> = Vec::new();
+        match story_type {
+            StoryType::Top => {
+                ids = if let Some(story) = &self.top {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StoryType::New => {
+                ids = if let Some(story) = &self.new {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StoryType::Best => {
+                ids = if let Some(story) = &self.best {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StoryType::Ask => {
+                ids = if let Some(story) = &self.ask {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StoryType::Job => {
+                ids = if let Some(story) = &self.job {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StoryType::Show => {
+                ids = if let Some(story) = &self.show {
+                    story.iter().cloned().take(amount).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            _ => {}
+        }
+
+        for (index, id) in ids.iter().enumerate() {
+            let story = self.fetch_story(*id).await?;
+            println!("Story #{} - id: {} - {}", index, id, story.title);
+        }
+
+        Ok(())
+    }
+
+    async fn fetch_story(&self, id: u64) -> Result<Story, HackerNewsApiError> {
+        let url = format!("{}/item/{}.json?", BASE_URL, id);
+
+        let story = reqwest::get(url)
+            .await?
+            .json::<Story>()
+            .await
+            .map_err(|e| HackerNewsApiError::AsyncRequestFailed(e))?;
+
+        Ok(story)
+    }
 }
 
 impl Default for HackerNewsResponse {
@@ -23,9 +97,11 @@ impl Default for HackerNewsResponse {
             ask: None,
             show: None,
             job: None,
+            stories: None,
         }
     }
 }
+
 #[derive(thiserror::Error, Debug)]
 enum HackerNewsApiError {
     #[error("Failed Fetching Story")]
@@ -50,15 +126,15 @@ struct Story {
 }
 
 struct HackerNewsAPI {
-    stories: Vec<u64>,
     endpoint: StoryType,
+    stories: HackerNewsResponse,
 }
 
 impl HackerNewsAPI {
     fn new() -> Self {
         Self {
-            stories: vec![],
             endpoint: StoryType::Top,
+            stories: HackerNewsResponse::default(),
         }
     }
 
@@ -115,10 +191,12 @@ impl HackerNewsAPI {
             }
         }
 
+        // self.stories = response;
+
         Ok(response)
     }
 
-    fn prepare_url(&self, id: Option<u32>) -> String {
+    fn prepare_url(&self, id: Option<u64>) -> String {
         let mut url = Url::parse(BASE_URL).unwrap();
 
         match self.endpoint {
@@ -139,17 +217,6 @@ impl HackerNewsAPI {
 
         url.to_string()
     }
-
-    // fn print_story(&mut self) {
-    //     for i in self.stories.iter().take(2) {
-    //         self.endpoint = StoryType::Item;
-    //         let url = self.prepare_url(Some(*i as u32));
-    //         let req = ureq::get(&url);
-    //         let response: Story = req.call().unwrap().into_json().unwrap();
-    //         // println!("{:?}", response);
-    //         self.stories_a.push(response);
-    //     }
-    // }
 }
 
 impl Default for HackerNewsAPI {
@@ -157,6 +224,8 @@ impl Default for HackerNewsAPI {
         Self::new()
     }
 }
+
+#[derive(Debug)]
 enum StoryType {
     Top,
     New,
@@ -188,21 +257,12 @@ struct TopStories {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // let top_stories = "https://hacker-news.firebaseio.com/v0/topstories.json";
-    //
-    // // let response = reqwest::get(top_stories).await?.text().await?;
-    //
-    // let top_stories_vec = reqwest::get(top_stories).await?.json::<Vec<u32>>().await?;
-    //
     let mut hn_api = HackerNewsAPI::new();
-    let stories = hn_api.collect_all_stories().await.unwrap();
-    println!("{:#?}", stories);
-    // for s in stories.iter().take(20) {
-    //     let story_url = format!("https://hacker-news.firebaseio.com/v0/item/{}.json", s);
-    //     let response = reqwest::get(story_url).await?.json::<Story>().await?;
-    //     println!("{:?}\n", response.title);
-    // }
+    let response = hn_api.collect_all_stories().await?;
+    // hn_api.print_story(StoryType::Top).await?;
 
+    // printing directly from the response object
+    response.debub_print_story(StoryType::Show).await?;
     Ok(())
 }
 
